@@ -1,0 +1,73 @@
+PROCESS ChatServer;
+	DCL clientsCount Natural := 0;
+	DCL i, tmp Natural;
+	DCL clients Clients_t;
+	DCL dest PId;
+	DCL msg Charstring;
+	DCL Integer port;
+
+	START;
+		TASK port := getPort();
+		CREATE TCPServer;
+		NEXTSTATE Only;
+
+	STATE Only;
+		INPUT Connect;
+		TASK clientsCount := addClient(clients, sender);
+		TASK i := 0;
+		lblPres:
+			DECISION i
+			( < clientsCount ) :
+				DECISION clients(i);
+				( /= sender ):
+					OUTPUT Presence(sender) TO clients(i);
+					OUTPUT Presence(clients(i) TO sender;
+				ELSE:
+				ENDDECISION;
+				TASK i:= i+1;
+				JOIN lblPres;
+			ELSE :
+			ENDDECISION;
+			NEXTSTATE -;
+
+		INPUT Disconnect;
+			TASK clientsCount := removeClient(clients, sender);
+			TASK i := 0;
+		lblAbs:
+			DECISION i
+			( < clientsCount ) :
+				DECISION clients(i);
+				( /= sender ):
+					OUTPUT Absence TO clients(i);
+				ELSE:
+				ENDDECISION;
+				TASK i:= i+1;
+			ELSE :
+				JOIN lblAbs;
+			ENDDECISION;
+			NEXTSTATE -;
+
+		INPUT Data(msg, dest);
+			DECISION dest;
+			(null):
+				COMMENT 'dispatch message';
+				TASK i := 0;
+			lblDat:
+				DECISION i;
+				( < clientsCount ) :
+					DECISION clients(i);
+					( /= sender ):
+						OUTPUT Data(msg, sender) TO clients(i);
+					ELSE:
+					ENDDECISION;
+					TASK i:= i+1;
+				ELSE :
+					JOIN lblDat;
+				ENDDECISION;
+			ELSE:
+				COMMENT 'private message';
+				OUTPUT Data(msg, sender) TO dest;
+			ENDDECISION;
+			NEXTSTATE -;
+	ENDSTATE Only;
+ENDPROCESS ChatServer;

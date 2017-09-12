@@ -1,0 +1,42 @@
+PROCESS ClientProxy;
+	DCL msg charstring;
+	DCL from, dest PId;
+	DCL data ByteArray_t;
+	NEWTYPE Marshaller_t
+		OPERATORS
+			parseVerb: ByteArray_t -> charstring;
+			marshallData: charstring, pid -> ByteAray_t;
+			marshallPresence: pid -> ByteAray_t;
+			marshallAbsence: pid -> ByteAray_t;
+	ENDNEWTYPE Marshaller_t;
+	START;
+		OUTPUT Connect;
+		NEXTSTATE Ready;
+	STATE Ready;
+		INPUT TCPData(data);
+			verb := parseVerb(data);
+			DECISION verb;
+			('Data')
+				msg := unmarshallString(data);
+				dest := unmarshallPId(data);
+				OUTPUT Data(msg, dest);
+			ELSE
+			ENDDECISION;
+			NEXTSTATE -;
+		INPUT TCPException;
+			OUTPUT Disconnect;
+			STOP;
+		INPUT Data(msg, from);
+			data := marshallData(msg, from);
+			OUTPUT TCPData(data);
+			NEXTSTATE -;
+		INPUT Presence(from);
+			data := marshallPresence(from);
+			OUTPUT TCPData(data);
+			NEXTSTATE -;
+		INPUT Absence(from);
+			data := marshallAbsence(from);
+			OUTPUT TCPData(data);
+			NEXTSTATE -;
+	ENDSTATE Ready;
+ENDPROCESS ClientProxy;

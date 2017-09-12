@@ -1,0 +1,64 @@
+PROCESS ServerProxy;
+	DCL client, cnt, dest, from PId;
+ 	DCL addr, msg Charstring;
+	DCL port Integer;
+	DCL d ByteArray_t;
+	START;
+		NEXTSTATE Idle;
+
+	STATE Idle;
+		INPUT Connect;
+			OUTPUT TSDUConnect;
+			TASK client := sender;
+			TASK addr := getAddress(), port := getPort();
+			NEXTSTATE Connecting;
+	ENDSTATE Idle;
+
+	STATE Connecting;
+		INPUT TSDUConnected;
+			TASK cnt := sender;
+			OUTPUT Presence(client);
+			NEXTSTATE Connected;
+		INPUT TSDUClosed;
+			LABEL lblDisc :
+			TASK cnt := null;
+			OUTPUT Absence(client);
+			NEXTSTATE Idle;
+	ENDSTATE Connecting;
+
+	STATE Connected;
+		INPUT TSDUClosed;
+		LABEL lblDisc :
+			OUTPUT Absence(self, self);
+			NEXTSTATE Idle;
+		INPUT TSDUData(d);
+			verb := parseVerb(d);
+			DECISION verb;
+			('Data') :
+				msg := unmarshallString(d);
+				from := unmarshallPId(d);
+				OUTPUT Data(msg, from);
+			('Presence') :
+				from := unmarshallPId(d);
+				OUTPUT Presence(from);
+			('Absence') :
+				from := unmarshallPId(d);
+				OUTPUT Absence(from);
+			ENDDECISION;
+			NEXTSTATE -;
+		INPUT TSDUClosed;
+			JOIN lblDisc
+		INPUT Data(msg, dest);
+				d := marshall('Data', msg, dest);
+				DECISION d
+				(/= null) :
+					OUTPUT TSDUData(d) TO cnt;
+				ELSE
+				ENDDECISION
+				NEXTSTATE -;
+		INPUT Disconnect;
+			OUTPUT TSDUClose TO conncetion;
+			NEXTSTATE Idle
+	ENDSTATE Connected;
+
+ENDPROCESS ServerProxy;
